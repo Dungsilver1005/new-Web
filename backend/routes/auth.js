@@ -196,7 +196,9 @@ router.put(
   "/change-password",
   protect,
   [
-    body("currentPassword").notEmpty().withMessage("Vui lòng nhập mật khẩu hiện tại"),
+    body("currentPassword")
+      .notEmpty()
+      .withMessage("Vui lòng nhập mật khẩu hiện tại"),
     body("newPassword")
       .isLength({ min: 6 })
       .withMessage("Mật khẩu mới phải có ít nhất 6 ký tự"),
