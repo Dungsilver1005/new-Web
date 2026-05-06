@@ -17,6 +17,7 @@ export const Statistics = () => {
   const [toolTypeSearch, setToolTypeSearch] = useState("");
   const [toolTypeTools, setToolTypeTools] = useState([]);
   const [searchResultText, setSearchResultText] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     category: "",
@@ -129,122 +130,64 @@ export const Statistics = () => {
     }
   };
 
-  const updateToolTypeStatsForSearch = (tools, searchText) => {
-    const keyword = searchText.trim().toUpperCase();
+const updateToolTypeStatsForSearch = (tools, searchText) => {
+  const keyword = searchText.trim().toUpperCase();
 
-    // --- Step 1: Group by slotIndex (the persistent key from backend) ---
-    const statsBySlot = {};
-    const toolsWithoutSlot = [];
+  // If no keyword, clear everything (only show after explicit search)
+  if (!keyword) {
+    setToolTypeStats([]);
+    setSearchResultText("");
+    return;
+  }
 
-    tools.forEach(tool => {
-      const idx = tool.slotIndex;
-      if (idx && idx >= 1 && idx <= 9) {
-        if (!statsBySlot[idx]) {
-          statsBySlot[idx] = {
-            name: tool.name || "Không tên",
-            count: 0,
-            slotIndex: idx,
-          };
-        }
+  // Build a map of slotIndex → { name, count } from DB data
+  // Chỉ đếm dụng cụ chưa được xuất kho (isInUse === false)
+  const statsBySlot = {};
+  tools.forEach(tool => {
+    const idx = Number(tool.slotIndex);
+    if (idx >= 1 && idx <= 9) {
+      if (!statsBySlot[idx]) {
+        statsBySlot[idx] = { name: tool.name || "Không tên", count: 0 };
+      }
+      // Chỉ cộng count nếu tool chưa được xuất kho
+      if (!tool.isInUse) {
         statsBySlot[idx].count += 1;
-      } else {
-        // Legacy tool with no slotIndex — handle in step 2
-        toolsWithoutSlot.push(tool);
-      }
-    });
-
-    // --- Step 2: For legacy tools without slotIndex, group by name & assign to free slots ---
-    // First, group legacy tools by name
-    const legacyByName = {};
-    toolsWithoutSlot.forEach(tool => {
-      const name = (tool.name || "N/A").trim();
-      if (!legacyByName[name]) legacyByName[name] = 0;
-      legacyByName[name] += 1;
-    });
-
-    // Assign each legacy group to the lowest available slot, respecting 10-item limit
-    Object.entries(legacyByName).forEach(([name, total]) => {
-      let remaining = total;
-      while (remaining > 0) {
-        // Find first slot with this name that is not full (<10)
-        const existingSlotEntry = Object.entries(statsBySlot).find(
-          ([, s]) => s.name === name && s.count < 10
-        );
-        if (existingSlotEntry) {
-          const [existingIdx] = existingSlotEntry;
-          const space = 10 - statsBySlot[existingIdx].count;
-          const toAdd = Math.min(space, remaining);
-          statsBySlot[existingIdx].count += toAdd;
-          remaining -= toAdd;
-        } else {
-          // Find a completely free slot
-          let freeIdx = null;
-          for (let i = 1; i <= 9; i++) {
-            if (!statsBySlot[i]) { freeIdx = i; break; }
-          }
-          if (freeIdx) {
-            const toAdd = Math.min(10, remaining);
-            statsBySlot[freeIdx] = { name, count: toAdd, slotIndex: freeIdx };
-            remaining -= toAdd;
-          } else {
-            break; // No more slots
-          }
-        }
-      }
-    });
-
-    // --- Step 3: Build result array of 9 slots ---
-    const result = [];
-    let matchedAny = false;
-
-    for (let i = 1; i <= 9; i++) {
-      const slot = statsBySlot[i];
-      if (slot) {
-        const isMatch = !keyword || slot.name.toUpperCase().includes(keyword);
-        if (isMatch) {
-          if (keyword) matchedAny = true;
-          result.push({
-            name: slot.name,
-            count: slot.count,
-            slotIndex: i,
-            warning: slot.count <= 5,
-            isEmpty: false,
-          });
-        } else {
-          result.push({ slotIndex: i, isEmpty: true });
-        }
-      } else {
-        result.push({ slotIndex: i, isEmpty: true });
       }
     }
+  });
 
-    // --- Step 4: Set state ---
-    if (!keyword) {
-      setToolTypeStats([]);
-      setSearchResultText("");
-      return;
-    }
-    if (!matchedAny) {
-      setToolTypeStats([]); // Show "Sản phẩm không tồn tại"
-      setSearchResultText("");
+  // Build full 9-slot result: count from DB only
+  const result = [];
+  let matchCount = 0;
+  for (let i = 1; i <= 9; i++) {
+    const slotData = statsBySlot[i];
+    const count = slotData?.count ?? 0;
+
+    if (slotData && slotData.name.toUpperCase().includes(keyword)) {
+      result.push({
+        slotIndex: i,
+        name: slotData.name,
+        count: count,
+        warning: count <= 5,
+        isEmpty: false,
+      });
+      matchCount++;
     } else {
-      setToolTypeStats(result);
-      // Build result summary text: group matched slots by name
-      const matchedSlots = result.filter(s => !s.isEmpty);
-      const nameToSlots = {};
-      matchedSlots.forEach(s => {
-        if (!nameToSlots[s.name]) nameToSlots[s.name] = [];
-        nameToSlots[s.name].push(s.slotIndex);
-      });
-      const parts = Object.entries(nameToSlots).map(([name, slots]) => {
-        const slotList = slots.join(", ");
-        return `"${name}" ở ngăn thứ ${slotList}`;
-      });
-      setSearchResultText(`Đã tìm thấy: ${parts.join(" | ")}`);
+      // Keep position but dimmed
+      result.push({ slotIndex: i, isEmpty: true });
     }
-  };
+  }
+
+  setToolTypeStats(result);
+  setSearchResultText(
+    matchCount > 0
+      ? `Đã tìm thấy: ${result.filter(s => !s.isEmpty).map(s => `"${s.name}" ở ngăn thứ ${s.slotIndex}`).join(" | ")}`
+      : `Không tìm thấy "${searchText}"`
+  );
+};
 
   const handleSearchToolType = () => {
+    setHasSearched(true);
     updateToolTypeStatsForSearch(toolTypeTools, toolTypeSearch);
   };
 
@@ -610,7 +553,11 @@ export const Statistics = () => {
               {searchResultText}
             </div>
           )}
-          {toolTypeStats.length === 0 ? (
+          {!hasSearched ? (
+            <div className="empty-chart" style={{ color: '#94a3b8' }}>
+              Nhập tên dụng cụ và nhấn Tìm để xem kết quả
+            </div>
+          ) : toolTypeStats.length === 0 ? (
             <div className="empty-chart">
               Sản phẩm không tồn tại
             </div>
@@ -619,13 +566,12 @@ export const Statistics = () => {
               {toolTypeStats.map((slot, index) => {
                 const displayIndex = slot.slotIndex || index + 1;
 
-                const isActiveSearch = toolTypeSearch.trim().length > 0;
-
                 if (slot.isEmpty) {
+                  // Non-matching slot: keep position, show faded card with only slot number
                   return (
-                    <div key={`empty-wrapper-${index}`} className="slot-wrapper">
-                      <div className="slot-card empty">
-                        <span className={`slot-index-number ${isActiveSearch ? 'dimmed' : ''}`}>{displayIndex}</span>
+                    <div key={`empty-wrapper-${displayIndex}`} className="slot-wrapper">
+                      <div className="slot-card slot-card-dimmed">
+                        <span className="slot-index-number dimmed">{displayIndex}</span>
                       </div>
                       <div className="slot-name-below invisible">-</div>
                     </div>
@@ -633,7 +579,7 @@ export const Statistics = () => {
                 }
 
                 return (
-                  <div key={`${slot.name}-${index}`} className="slot-wrapper">
+                  <div key={`${slot.name}-${displayIndex}`} className="slot-wrapper">
                     <div className="slot-card">
                       <span className="slot-index-number">{displayIndex}</span>
                       {slot.warning && (
@@ -641,16 +587,18 @@ export const Statistics = () => {
                           <span className="material-symbols-outlined">notifications_active</span>
                         </div>
                       )}
-                      <div className={`slot-count ${slot.count === 10 ? '' :
+                      <div className={`slot-count ${
+                        slot.count === 10 ? '' :
                         slot.count > 5 ? 'count-green' : 'count-red'
-                        }`}>
+                      }`}>
                         {slot.count}
                       </div>
                       <div className="slot-progress-container">
                         <div
-                          className={`slot-progress-bar ${slot.count === 10 ? 'bg-black' :
+                          className={`slot-progress-bar ${
+                            slot.count === 10 ? 'bg-black' :
                             slot.count > 5 ? 'bg-green' : 'bg-red'
-                            }`}
+                          }`}
                           style={{ width: `${(slot.count / 10) * 100}%` }}
                         ></div>
                       </div>

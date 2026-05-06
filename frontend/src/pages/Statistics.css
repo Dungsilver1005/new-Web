@@ -924,6 +924,13 @@
   box-shadow: none;
 }
 
+.slot-card-dimmed {
+  background: #f8fafc;
+  border: 1px dashed #e2e8f0;
+  box-shadow: none;
+  opacity: 0.45;
+}
+
 .slot-warning {
   position: absolute;
   top: 0.25rem;
@@ -1022,4 +1029,12 @@
   padding: 3rem;
   color: #64748b;
   font-size: 1rem;
+}
+.highlight-slot{
+  border:2px solid #ff9800;
+  box-shadow:0 0 10px #ff9800;
+}
+
+.dimmed-slot{
+  opacity:0.3;
 }

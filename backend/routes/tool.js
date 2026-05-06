@@ -216,11 +216,20 @@ router.post(
       // Remove history from req.body if it exists, we'll add our own
       const { history, ...toolFields } = req.body;
 
-      // Logic to assign slotIndex (1-9)
+      // Logic to assign slotIndex (1-9) — DB only
       const toolName = (toolFields.name || "").trim();
 
-      // 1. Find existing slots for this tool name that are not full (< 10 items)
-      const existingSlotsForName = await Tool.aggregate([
+      // Kiểm tra tổng số tủ từ DB. Nếu >= 90 thì từ chối
+      const totalDb = await Tool.countDocuments();
+      if (totalDb >= 90) {
+        return res.status(400).json({
+          success: false,
+          message: "Tủ dụng cụ đã đầy (90/90 dụng cụ)",
+        });
+      }
+
+      // 1. Tìm ngăn đang chứa cùng tên và chưa đầy (DB count < 10)
+      const slotsForName = await Tool.aggregate([
         { $match: { name: toolName } },
         { $group: { _id: "$slotIndex", count: { $sum: 1 } } },
         { $match: { count: { $lt: 10 } } },
@@ -229,15 +238,14 @@ router.post(
 
       let assignedSlotIndex;
 
-      if (existingSlotsForName.length > 0) {
-        // Use the first available slot index for this tool name
-        assignedSlotIndex = existingSlotsForName[0]._id;
+      if (slotsForName.length > 0) {
+        // Dùng ngăn đầu tiên còn chỗ
+        assignedSlotIndex = slotsForName[0]._id;
       } else {
-        // 2. New tool name or all existing slots for this name are full
-        // Find all currently occupied slot indices
+        // 2. Tên mới hoặc tất cả ngăn cùng tên đã đầy → tìm ngăn trống
         const occupiedSlots = await Tool.distinct("slotIndex");
 
-        // Find the first available index from 1 to 9
+        // Tìm chỉ số ngăn trống đầu tiên từ 1 tới 9
         for (let i = 1; i <= 9; i++) {
           if (!occupiedSlots.includes(i)) {
             assignedSlotIndex = i;
