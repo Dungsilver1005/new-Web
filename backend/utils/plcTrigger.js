@@ -61,7 +61,7 @@ function writeBit(varName, value) {
     return new Promise((resolve, reject) => {
         conn.writeItems(varName, value, (err) => {
             if (err) {
-                console.error(❌ Ghi ${varName} = ${value} lỗi:, err);
+                console.error(`❌ Ghi ${varName} = ${value} lỗi:`, err);
                 return reject(err);
             }
             resolve(true);
@@ -82,27 +82,27 @@ function delay(ms) {
 async function triggerSlot(slotIndex) {
     // Validate
     if (!slotIndex || slotIndex < 1 || slotIndex > 9) {
-        throw new Error(slotIndex không hợp lệ: ${slotIndex} (phải từ 1 đến 9));
+        throw new Error(`slotIndex không hợp lệ: ${slotIndex} (phải từ 1 đến 9)`);
     }
 
-    const varName = SL${slotIndex}_TRIGGER;
+    const varName = `SL${slotIndex}_TRIGGER`;
 
     try {
         await connectTrigger();
 
         // Bước 1: Ghi TRUE
         await writeBit(varName, true);
-        console.log(🔔 Trigger ON slot ${slotIndex});
+        console.log(`🔔 Trigger ON slot ${slotIndex}`);
 
         // Bước 2: Delay 10000ms
         await delay(10000);
 
         // Bước 3: Ghi FALSE (reset)
         await writeBit(varName, false);
-        console.log(🔕 Trigger OFF slot ${slotIndex});
+        console.log(`🔕 Trigger OFF slot ${slotIndex}`);
 
     } catch (err) {
-        console.error(❌ triggerSlot(${slotIndex}) lỗi:, err);
+        console.error(`❌ triggerSlot(${slotIndex}) lỗi:`, err);
         throw err;
     }
 }

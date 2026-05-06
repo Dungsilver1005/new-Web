@@ -2,15 +2,10 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
-<<<<<<< HEAD
-const { initPLC, readPLC, writePLC } = require("./utils/plcConnector");
-const Tool = require("./models/Tool");
-=======
 const createAdminIfNotExists = require("./utils/createAdmin");
 const getPlcData = require("./utils/plc_connected");
 const Tool = require("./models/Tool");
 const { triggerSlot } = require("./utils/plcTrigger");
->>>>>>> a48e80b
 
 // Load env vars
 dotenv.config();
@@ -73,29 +68,9 @@ app.get("/api/health", (req, res) => {
   res.json({ success: true, message: "Server is running" });
 });
 
-
-
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || "0.0.0.0"; // Listen trên tất cả interfaces
 
-<<<<<<< HEAD
-app.listen(PORT, HOST, async () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
-
-  try {
-    await initPLC();
-    console.log("PLC initialized");
-    startPLCListener();
-  } catch (err) {
-    console.error("Không thể kết nối PLC:", err.message || err);
-  }
-});
-=======
-// app.listen(PORT, HOST, () => {
-//   console.log(`Server running on http://${HOST}:${PORT}`);
-//   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
-// });
 const startServer = async () => {
   try {
     await connectDB(); // 1️⃣ Kết nối DB trước
@@ -165,6 +140,4 @@ async function watchTools() {
     });
 }
 
-
 startServer();
->>>>>>> a48e80b
