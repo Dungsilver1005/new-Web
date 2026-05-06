@@ -1,0 +1,33 @@
+# 🚀 Định hướng Phát triển Tương lai — I-ToolsysWeb
+
+Trong thời gian tới, hệ thống sẽ tiếp tục được cải thiện toàn diện nhằm tăng tính ổn định, hiệu năng và khả năng ứng dụng thực tế trong môi trường sản xuất công nghiệp.
+
+---
+
+## 1. Hoàn thiện Quản lý Kho Dụng cụ
+
+Hệ thống sẽ tiếp tục được hoàn thiện về chức năng quản lý kho, bao gồm tối ưu hóa quá trình nhập – xuất dụng cụ thông qua việc tích hợp **nhập liệu hàng loạt từ file Excel/CSV** và tự động ánh xạ dữ liệu vào schema hiện tại với cơ chế validate từng dòng trước khi persist vào MongoDB. Hệ thống theo dõi số lượng dụng cụ theo từng ngăn tủ vật lý (slot 1–9) sẽ được mở rộng để hỗ trợ **cảnh báo ngưỡng tồn kho thấp** thông qua luồng event-driven phía backend, sử dụng middleware kiểm tra tự động sau mỗi thao tác import/export. Điều này giúp người quản lý dễ dàng kiểm soát tình trạng dụng cụ và hạn chế thiếu hụt không mong muốn trong quá trình sản xuất.
+
+---
+
+## 2. Hệ thống Thống kê & Báo cáo Nâng cao
+
+Hệ thống sẽ được bổ sung module thống kê và báo cáo chuyên sâu, cho phép người dùng theo dõi **lịch sử sử dụng dụng cụ theo chuỗi thời gian** (time-series) với các biểu đồ trực quan hóa tần suất xuất kho, tỷ lệ hư hỏng và biến động tồn kho. Dữ liệu sẽ được tổng hợp thông qua **MongoDB Aggregation Pipeline** với các giai đoạn `$group`, `$match`, `$project` theo tuần/tháng, đồng thời được cache phía server để giảm tải truy vấn lặp lại. Các báo cáo có thể xuất ra định dạng PDF hoặc Excel để hỗ trợ lập kế hoạch mua sắm và phân tích hiệu quả quản lý dụng cụ dài hạn.
+
+---
+
+## 3. Tích hợp Thiết bị Xưởng & Tự động hóa
+
+Trong tương lai, hệ thống có thể được mở rộng để kết nối với các thiết bị sản xuất thông qua **giao thức OPC-UA hoặc MQTT**, cho phép trao đổi dữ liệu trực tiếp với **PLC (Programmable Logic Controller)** và hệ thống **MES (Manufacturing Execution System)**. Việc tích hợp này sẽ cho phép hệ thống tự động ghi nhận lần sử dụng dụng cụ khi máy hoạt động, giảm thiểu sự phụ thuộc vào thao tác thủ công. Ngoài ra, việc in và quét **mã QR/Barcode** gắn trực tiếp lên dụng cụ sẽ được tích hợp vào luồng mượn–trả, cho phép xác định danh tính dụng cụ tức thì bằng camera trên thiết bị mobile mà không cần nhập tay.
+
+---
+
+## 4. Thông báo Real-time & Quy trình Duyệt Tự động
+
+Hệ thống sẽ tích hợp **WebSocket (Socket.io)** để cung cấp thông báo real-time giữa người dùng và quản trị viên — đặc biệt trong luồng yêu cầu mượn/trả dụng cụ — thay thế mô hình polling hiện tại. Cơ chế **workflow tự động** sẽ được xây dựng để xử lý các yêu cầu thông thường mà không cần phê duyệt thủ công, dựa trên các điều kiện cấu hình trước (loại dụng cụ, vai trò người dùng, hạn mức). Điều này sẽ giúp rút ngắn thời gian xử lý và giảm tải cho quản trị viên trong ca sản xuất bận rộn.
+
+---
+
+## 5. Cải thiện Giao diện & Hiệu năng Hệ thống
+
+Giao diện người dùng sẽ tiếp tục được tối ưu theo hướng **mobile-first**, hướng đến việc chuyển đổi thành **Progressive Web App (PWA)** để hoạt động offline và cài đặt được trên thiết bị công nhân tại xưởng. Phía frontend sẽ được refactor để áp dụng **React Query** hoặc **SWR** nhằm quản lý server state và cache thông minh hơn, giảm thiểu re-render không cần thiết. Phía backend sẽ được cải thiện với **connection pooling**, **index tối ưu trên MongoDB** và cơ chế **pagination cursor-based** thay thế offset để xử lý hiệu quả hơn khi tập dữ liệu tăng trưởng. Toàn bộ hệ thống sẽ được container hóa bằng **Docker** và thiết lập pipeline CI/CD tự động để đảm bảo khả năng triển khai liên tục và nhất quán.

@@ -1,6 +1,7 @@
 # backend
 node_modules
 .env
+# backend/utils/createAdmin.js
 #--------------------------------
 # Logs
 logs
@@ -26,4 +27,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-

@@ -1,0 +1,99 @@
+# Phân tích: Số thứ tự ngăn (`slotIndex`) có được lưu riêng trong database không?
+
+## ✅ Câu trả lời ngắn gọn
+
+**Có.** `slotIndex` là một trường độc lập được lưu trực tiếp trong **mỗi document Tool** trong MongoDB.
+
+---
+
+## 📦 Cấu trúc Database (`Tool.js` – Mongoose Schema)
+
+Trường `slotIndex` được khai báo trực tiếp trong schema của model `Tool`:
+
+```js
+// backend/models/Tool.js (dòng 108–112)
+slotIndex: {
+  type: Number,
+  min: 1,
+  max: 9,
+},
+```
+
+### Đặc điểm:
+| Thuộc tính | Giá trị |
+|---|---|
+| Kiểu dữ liệu | `Number` |
+| Giá trị hợp lệ | `1` đến `9` (tối đa 9 ngăn) |
+| Phạm vi lưu trữ | Từng document Tool riêng lẻ |
+| Bắt buộc | Không (optional), nhưng được gán tự động khi tạo mới |
+
+---
+
+## ⚙️ Logic gán `slotIndex` khi tạo dụng cụ mới
+
+Khi gọi `POST /api/tools`, backend **tự động tính toán và gán** `slotIndex` (dòng 218–257 trong `routes/tool.js`):
+
+```
+1. Tìm xem tên dụng cụ đã chiếm ngăn nào chưa và ngăn đó còn < 10 cái không
+   → Nếu có: dùng chung ngăn đó (gộp cùng loại vào 1 ngăn)
+
+2. Nếu chưa có ngăn nào cho tên này (hoặc đã đầy):
+   → Tìm ngăn còn trống (1–9) và gán vào đó
+
+3. Nếu cả 9 ngăn đều đầy:
+   → Trả về lỗi "Tủ dụng cụ đã đầy (9/9 ngăn)"
+```
+
+### Nguyên tắc gộp ngăn:
+- Các dụng cụ **cùng tên** → cùng `slotIndex`
+- Mỗi ngăn chứa **tối đa 10 dụng cụ**
+- Tối đa **9 ngăn** (9 loại dụng cụ khác nhau)
+
+---
+
+## 🖥️ Cách Frontend sử dụng `slotIndex` (`Statistics.jsx`)
+
+Frontend **đọc trực tiếp** `tool.slotIndex` từ dữ liệu API trả về để hiển thị số thứ tự ngăn:
+
+```js
+// Statistics.jsx (dòng 140–153)
+tools.forEach(tool => {
+  const idx = tool.slotIndex;
+  if (idx && idx >= 1 && idx <= 9) {
+    // Gộp vào ngăn theo slotIndex từ DB
+    statsBySlot[idx] = { name: tool.name, count: ..., slotIndex: idx };
+  } else {
+    // Tool "legacy" chưa có slotIndex → gán tự động ở bước 2
+    toolsWithoutSlot.push(tool);
+  }
+});
+```
+
+Số hiển thị ở góc trên mỗi ô ngăn (1, 2, 3... 9) chính là giá trị `slotIndex` lấy từ database:
+
+```js
+// Statistics.jsx (dòng 620)
+const displayIndex = slot.slotIndex || index + 1;
+```
+
+---
+
+## 🔍 Tóm tắt luồng dữ liệu
+
+```
+Tạo Tool mới (POST /api/tools)
+        ↓
+Backend tính slotIndex (1–9) tự động
+        ↓
+Lưu vào MongoDB: { name: "Dao xọc", slotIndex: 3, ... }
+        ↓
+Frontend fetch → đọc tool.slotIndex
+        ↓
+Hiển thị số "3" ở góc ngăn thứ 3 trên giao diện
+```
+
+---
+
+## ⚠️ Lưu ý: Tool "legacy" (không có `slotIndex`)
+
+Các dụng cụ được tạo **trước khi có tính năng `slotIndex`** sẽ không có trường này. Frontend xử lý bằng cách gộp chúng theo tên và gán vào ngăn trống còn lại (Step 2 trong `updateToolTypeStatsForSearch`). Tuy nhiên, số thứ tự ngăn này chỉ là **tạm thời trên giao diện**, không được lưu lại vào DB.

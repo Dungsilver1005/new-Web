@@ -62,6 +62,13 @@ export const ToolsList = () => {
     }
   };
 
+  const [cabinetStatus, setCabinetStatus] = useState({
+    totalSlots: 0,
+    totalItems: 0,
+    countsByName: {},
+    isStrictFull: false
+  });
+
   const fetchTools = async () => {
     setLoading(true);
     try {
@@ -104,6 +111,33 @@ export const ToolsList = () => {
           page: response.page || 1,
           pages: response.pages || 1,
         });
+
+        // Calculate cabinet capacity (only once or on full tool lists)
+        if (!filters.search && !filters.status && !filters.location && activeFilter === "all") {
+          const allToolsResponse = await toolService.getTools({ limit: 1000 });
+          if (allToolsResponse.success) {
+            const allTools = allToolsResponse.data || [];
+            const grouped = allTools.reduce((acc, t) => {
+              const name = (t.name || "N/A").trim();
+              acc[name] = (acc[name] || 0) + 1;
+              return acc;
+            }, {});
+
+            let totalSlots = 0;
+            let totalItems = 0;
+            Object.values(grouped).forEach(count => {
+              totalSlots += Math.ceil(count / 10);
+              totalItems += count;
+            });
+
+            setCabinetStatus({
+              totalSlots,
+              totalItems,
+              countsByName: grouped,
+              isStrictFull: totalSlots >= 9 && totalItems >= 90
+            });
+          }
+        }
       }
     } catch (err) {
       showError(
@@ -129,6 +163,22 @@ export const ToolsList = () => {
   };
 
   const handleCreateTool = async (formData) => {
+    // Validation before creating
+    if (cabinetStatus.totalSlots >= 9) {
+      const toolName = (formData.name || "").trim();
+      const currentCount = cabinetStatus.countsByName[toolName] || 0;
+
+      if (currentCount === 0) {
+        showError("Tủ đã đầy 9 ngăn. Không thể thêm sản phẩm mới!");
+        return;
+      }
+
+      if (currentCount % 10 === 0) {
+        showError("Sản phẩm đã đầy ngăn. Không thể thêm dụng cụ này!");
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const response = await toolService.createTool(formData);
@@ -256,15 +306,27 @@ export const ToolsList = () => {
               Quản lý toàn bộ vòng đời dụng cụ và thiết bị trong kho sản xuất
             </p>
           </div>
-          {isAdmin && (
-            <button
-              className="btn-add-tool"
-              onClick={() => setShowCreateModal(true)}
-            >
-              <span className="material-symbols-outlined">add</span>
-              <span>Thêm dụng cụ mới</span>
-            </button>
-          )}
+          <div className="header-actions-wrapper">
+            {cabinetStatus.totalSlots >= 9 && isAdmin && (
+              <div className="cabinet-full-warning">
+                <span className="material-symbols-outlined">warning</span>
+                {cabinetStatus.isStrictFull
+                  ? `Tủ dụng cụ đã đầy (${cabinetStatus.totalItems}/90). Không thể thêm mới!`
+                  : "Tủ đã dùng hết 9 ngăn. Chỉ được phép thêm các loại dụng cụ hiện có còn chỗ!"}
+              </div>
+            )}
+            {isAdmin && (
+              <button
+                className={`btn-add-tool ${cabinetStatus.isStrictFull ? "btn-disabled" : ""}`}
+                onClick={() => !cabinetStatus.isStrictFull && setShowCreateModal(true)}
+                disabled={cabinetStatus.isStrictFull}
+                title={cabinetStatus.isStrictFull ? "Tủ đã đầy" : "Thêm dụng cụ mới"}
+              >
+                <span className="material-symbols-outlined">add</span>
+                <span>Thêm dụng cụ mới</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Filters & Search Bar */}
@@ -331,44 +393,39 @@ export const ToolsList = () => {
           {/* Quick Filter Chips */}
           <div className="quick-filters">
             <button
-              className={`filter-chip ${
-                activeFilter === "all" ? "active" : ""
-              }`}
+              className={`filter-chip ${activeFilter === "all" ? "active" : ""
+                }`}
               onClick={() => handleQuickFilter("all")}
             >
               Tất cả
             </button>
             <button
-              className={`filter-chip ${
-                activeFilter === "available" ? "active" : ""
-              }`}
+              className={`filter-chip ${activeFilter === "available" ? "active" : ""
+                }`}
               onClick={() => handleQuickFilter("available")}
             >
               <span className="chip-dot chip-dot-green"></span>
               Sẵn sàng
             </button>
             <button
-              className={`filter-chip ${
-                activeFilter === "in_use" ? "active" : ""
-              }`}
+              className={`filter-chip ${activeFilter === "in_use" ? "active" : ""
+                }`}
               onClick={() => handleQuickFilter("in_use")}
             >
               <span className="chip-dot chip-dot-blue"></span>
               Đang sử dụng
             </button>
             <button
-              className={`filter-chip ${
-                activeFilter === "maintenance" ? "active" : ""
-              }`}
+              className={`filter-chip ${activeFilter === "maintenance" ? "active" : ""
+                }`}
               onClick={() => handleQuickFilter("maintenance")}
             >
               <span className="chip-dot chip-dot-amber"></span>
               Bảo trì
             </button>
             <button
-              className={`filter-chip ${
-                activeFilter === "broken" ? "active" : ""
-              }`}
+              className={`filter-chip ${activeFilter === "broken" ? "active" : ""
+                }`}
               onClick={() => handleQuickFilter("broken")}
             >
               <span className="chip-dot chip-dot-red"></span>

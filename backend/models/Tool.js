@@ -105,6 +105,11 @@ const toolSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  slotIndex: {
+    type: Number,
+    min: 1,
+    max: 9,
+  },
 });
 
 toolSchema.pre("save", async function () {

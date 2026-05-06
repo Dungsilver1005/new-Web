@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const ExportReceipt = require("../models/ExportReceipt");
 const Tool = require("../models/Tool");
 const { protect, authorize } = require("../middleware/auth");
+const { triggerSlot } = require("../utils/plcTrigger");
 
 const router = express.Router();
 
@@ -84,6 +85,7 @@ router.post(
     body("tools.*.tool").notEmpty().withMessage("Vui lòng chọn dụng cụ"),
   ],
   async (req, res) => {
+    console.log("🚨🚨🚨 [POST /api/export-receipts] Request received! 🚨🚨🚨");
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -148,6 +150,25 @@ router.post(
           date: new Date(),
         });
         await tool.save();
+      }
+
+      // === GỬI TRIGGER PLC — mỗi slot chỉ trigger 1 lần ===
+      console.log("🔍 [DEBUG] Bắt đầu trigger PLC, số tools:", tools.length);
+      const triggeredSlots = new Set();
+      for (const item of tools) {
+        const toolDoc = await Tool.findById(item.tool);
+        const slotIndex = toolDoc?.slotIndex;
+        console.log("🔍 [DEBUG] Tool:", toolDoc?.productCode, "slotIndex:", slotIndex);
+        if (slotIndex && !triggeredSlots.has(slotIndex)) {
+          triggeredSlots.add(slotIndex);
+          try {
+            await triggerSlot(slotIndex);
+            console.log(`Xuất ${toolDoc.productCode} tại slot ${slotIndex}`);
+          } catch (plcErr) {
+            console.error(`⚠️ Trigger PLC slot ${slotIndex} lỗi:`, plcErr);
+            // Không block response — phiếu vẫn được tạo
+          }
+        }
       }
 
       const populatedReceipt = await ExportReceipt.findById(receipt._id)

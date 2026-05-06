@@ -1,0 +1,103 @@
+# Phân tích sự đồng bộ giữa code giả lập PLC (Fake PLC) và PLC thật
+
+Dựa trên hai đoạn code bạn cung cấp, việc chuyển từ **Fake PLC** sang **PLC thật** có thể gặp phải một số vấn đề về **cấu trúc dữ liệu** và **khả năng phục hồi khi lỗi**. Dưới đây là phân tích chi tiết và lời khuyên.
+
+---
+
+## 1. Xét về sự tương thích cấu trúc (Sẽ gây lỗi mất đồng bộ)
+
+**Phần Fake PLC (Đang chạy tốt):**
+```js
+plcData = {
+    SL1: Math.floor(Math.random() * 10),
+    // ... đến SL9
+};
+```
+👉 `plcData` đảm bảo **luôn là một object** có chứa các key `SL1` đến `SL9`.
+
+**Phần PLC thật (Đang comment):**
+```js
+conn.readAllItems((err, values) => {
+    if (err) {
+        console.error("❌ Lỗi đọc PLC:", err);
+        return; // NẾU CÓ LỖI: Dừng lại, không cập nhật plcData
+    }
+    plcData = values; // NẾU THÀNH CÔNG: Gán thẳng plcData = values
+    // ...
+});
+```
+
+### 🔴 Vấn đề:
+Thư viện `nodes7` khi gọi `conn.readAllItems` có thể trả về `values` với các định dạng khác nhau tùy vào trạng thái đọc thực tế từ phần cứng.
+Đặc biệt, nếu **chỉ có 1 biến đọc thành công hoặc 1 phần thất bại**, cấu trúc của `values` có thể bị thiếu key, hoặc thậm chí `values` trả về `undefined` nếu rớt mạng kết nối giữa vòng lặp.
+
+Việc gán thẳng `plcData = values;` rủi ro ở chỗ: Nỡ như `values` bị thiêu `SL3` thì `plcData.SL3` sẽ thành `undefined`. Khi frontend gọi `plcData?.SL3 ?? 0`, nó sẽ trả về `0`, dẫn đến thông số ở frontend bị nhảy sai.
+
+---
+
+## 2. Rủi ro về thiết kế "Fallback" ban đầu
+
+Cả 2 đoạn code đều khai báo biến khởi tạo ban đầu giống nhau:
+```js
+let plcData = {
+    SL1: 0, SL2: 0, SL3: 0, SL4: 0, SL5: 0, SL6: 0, SL7: 0, SL8: 0, SL9: 0
+};
+```
+
+Tuy nhiên, trong code PLC thật:
+```js
+if (err) {
+    console.error("❌ Lỗi đọc PLC:", err);
+    return;
+}
+plcData = values;
+```
+Nếu bị đứt cáp hoặc PLC mất kết nối mạng vào ban đêm:
+1. Sẽ in lỗi: `❌ Lỗi đọc PLC: ...`
+2. Lệnh `return;` thực thi, **từ chối cập nhật `plcData` mới**.
+3. **Kết quả:** Code của bạn sẽ *giữ nguyên* giá trị `plcData` của lần đọc thành công cuối cùng thay vì báo "0" hay "Mất kết nối", làm frontend nghĩ rằng số lượng tool vẫn bình thường. (Điều này cũng có thể là tính năng bạn muốn, nhưng cần lưu ý).
+
+---
+
+## 3. Cách fix để PLC thật hoạt động y hệt Fake PLC, chống sập dữ liệu
+
+Để an toàn tuyệt đối và đảm bảo frontend nhận dữ liệu mượt mà như khi dùng Fake, bạn nên **merge dữ liệu** `values` nhận được vào `plcData` cũ, thay vì gán đè toàn bộ `plcData = values`.
+
+Hãy sửa đoạn `conn.readAllItems` trong code PLC thật như sau:
+
+```javascript
+conn.readAllItems((err, values) => {
+    if (err) {
+        console.error("❌ Lỗi đọc PLC:", err);
+        return; // Vẫn giữ nguyên giá trị đọc được lần cuối cùng
+    }
+    
+    // ✅ CÁCH FIX SỰ ĐỒNG BỘ: Chỉ update các key hợp lệ từ values, giữ lại cấu trúc ban đầu
+    if (values && typeof values === 'object') {
+        plcData = {
+            SL1: values.SL1 !== undefined ? values.SL1 : plcData.SL1,
+            SL2: values.SL2 !== undefined ? values.SL2 : plcData.SL2,
+            SL3: values.SL3 !== undefined ? values.SL3 : plcData.SL3,
+            SL4: values.SL4 !== undefined ? values.SL4 : plcData.SL4,
+            SL5: values.SL5 !== undefined ? values.SL5 : plcData.SL5,
+            SL6: values.SL6 !== undefined ? values.SL6 : plcData.SL6,
+            SL7: values.SL7 !== undefined ? values.SL7 : plcData.SL7,
+            SL8: values.SL8 !== undefined ? values.SL8 : plcData.SL8,
+            SL9: values.SL9 !== undefined ? values.SL9 : plcData.SL9,
+        };
+    }
+
+    console.log(`[${new Date().toLocaleTimeString()}] Dữ liệu nhận từ PLC mượt:`, plcData);
+});
+```
+
+---
+
+## Tóm lại (Kết luận)
+
+Đoạn code PLC thật đã comment của bạn **hoàn toàn có thể hoạt động được** vì thư viện `nodes7` trả về `values` với dạng `{ SL1: number, SL2: number, ... }` tương đồng với Fake PLC.
+
+**Bạn chỉ cần làm 2 việc:**
+1. Comment bôi đen phần Fake PLC hiện tại đi.
+2. Mở comment phần code PLC thật ra.
+3. Thay thế dòng `plcData = values;` ngắn ngủi bằng khối code an toàn (Merge Check) như mình tư vấn bên trên để chống sập frontend khi phần cứng truyền chập chờn hoặc thiếu biến!

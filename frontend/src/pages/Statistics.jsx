@@ -16,6 +16,8 @@ export const Statistics = () => {
   const [toolTypeStats, setToolTypeStats] = useState([]);
   const [toolTypeSearch, setToolTypeSearch] = useState("");
   const [toolTypeTools, setToolTypeTools] = useState([]);
+  const [searchResultText, setSearchResultText] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     category: "",
@@ -120,64 +122,72 @@ export const Statistics = () => {
       // Nếu đang có từ khóa tìm kiếm thì tính lại thống kê sau khi load dữ liệu
       if (toolTypeSearch.trim()) {
         updateToolTypeStatsForSearch(tools, toolTypeSearch);
+      } else {
+        setToolTypeStats([]); // Luôn xóa khi không có từ khóa tìm kiếm
       }
     } catch (err) {
       console.error("Error fetching tool type stats:", err);
     }
   };
 
-  const updateToolTypeStatsForSearch = (tools, searchText) => {
-    const keyword = searchText.trim().toUpperCase();
+const updateToolTypeStatsForSearch = (tools, searchText) => {
+  const keyword = searchText.trim().toUpperCase();
 
-    if (!keyword) {
-      setToolTypeStats([]);
-      return;
-    }
+  // If no keyword, clear everything (only show after explicit search)
+  if (!keyword) {
+    setToolTypeStats([]);
+    setSearchResultText("");
+    return;
+  }
 
-    // Lọc theo tên dụng cụ
-    const matchedTools = tools.filter((tool) =>
-      (tool.name || "").toUpperCase().includes(keyword)
-    );
-
-    if (matchedTools.length === 0) {
-      setToolTypeStats([]);
-      return;
-    }
-
-    // Nhóm theo tên dụng cụ và thống kê theo vị trí
-    const grouped = matchedTools.reduce((acc, tool) => {
-      const typeName = (tool.name || "Không tên").trim();
-      if (!acc[typeName]) {
-        acc[typeName] = {
-          name: typeName,
-          total: 0,
-          warehouse: 0,
-          inUse: 0,
-          maintenance: 0,
-          disposed: 0,
-        };
+  // Build a map of slotIndex → { name, count } from DB data
+  // Chỉ đếm dụng cụ chưa được xuất kho (isInUse === false)
+  const statsBySlot = {};
+  tools.forEach(tool => {
+    const idx = Number(tool.slotIndex);
+    if (idx >= 1 && idx <= 9) {
+      if (!statsBySlot[idx]) {
+        statsBySlot[idx] = { name: tool.name || "Không tên", count: 0 };
       }
+      // Chỉ cộng count nếu tool chưa được xuất kho
+      if (!tool.isInUse) {
+        statsBySlot[idx].count += 1;
+      }
+    }
+  });
 
-      const group = acc[typeName];
-      group.total += 1;
+  // Build full 9-slot result: count from DB only
+  const result = [];
+  let matchCount = 0;
+  for (let i = 1; i <= 9; i++) {
+    const slotData = statsBySlot[i];
+    const count = slotData?.count ?? 0;
 
-      const location = tool.location || "warehouse";
-      if (location === "warehouse") group.warehouse += 1;
-      else if (location === "in_use") group.inUse += 1;
-      else if (location === "maintenance") group.maintenance += 1;
-      else if (location === "disposed") group.disposed += 1;
-      else group.warehouse += 1;
+    if (slotData && slotData.name.toUpperCase().includes(keyword)) {
+      result.push({
+        slotIndex: i,
+        name: slotData.name,
+        count: count,
+        warning: count <= 5,
+        isEmpty: false,
+      });
+      matchCount++;
+    } else {
+      // Keep position but dimmed
+      result.push({ slotIndex: i, isEmpty: true });
+    }
+  }
 
-      return acc;
-    }, {});
-
-    const groupedArray = Object.values(grouped).sort(
-      (a, b) => b.total - a.total
-    );
-    setToolTypeStats(groupedArray);
-  };
+  setToolTypeStats(result);
+  setSearchResultText(
+    matchCount > 0
+      ? `Đã tìm thấy: ${result.filter(s => !s.isEmpty).map(s => `"${s.name}" ở ngăn thứ ${s.slotIndex}`).join(" | ")}`
+      : `Không tìm thấy "${searchText}"`
+  );
+};
 
   const handleSearchToolType = () => {
+    setHasSearched(true);
     updateToolTypeStatsForSearch(toolTypeTools, toolTypeSearch);
   };
 
@@ -418,18 +428,15 @@ export const Statistics = () => {
                 style={{
                   background: `conic-gradient(
                     #10b981 0% ${percentages.inUse}%,
-                    #f59e0b ${percentages.inUse}% ${
-                    percentages.inUse + percentages.maintenance
-                  }%,
-                    #ef4444 ${percentages.inUse + percentages.maintenance}% ${
-                    percentages.inUse +
+                    #f59e0b ${percentages.inUse}% ${percentages.inUse + percentages.maintenance
+                    }%,
+                    #ef4444 ${percentages.inUse + percentages.maintenance}% ${percentages.inUse +
                     percentages.maintenance +
                     percentages.unusable
-                  }%,
-                    #e5e7eb ${
-                      percentages.inUse +
-                      percentages.maintenance +
-                      percentages.unusable
+                    }%,
+                    #e5e7eb ${percentages.inUse +
+                    percentages.maintenance +
+                    percentages.unusable
                     }% 100%
                   )`,
                 }}
@@ -540,62 +547,64 @@ export const Statistics = () => {
               </button>
             </div>
           </div>
-          {toolTypeStats.length === 0 ? (
+          {searchResultText && (
+            <div className="search-result-hint">
+              <span className="material-symbols-outlined search-result-icon">location_on</span>
+              {searchResultText}
+            </div>
+          )}
+          {!hasSearched ? (
+            <div className="empty-chart" style={{ color: '#94a3b8' }}>
+              Nhập tên dụng cụ và nhấn Tìm để xem kết quả
+            </div>
+          ) : toolTypeStats.length === 0 ? (
             <div className="empty-chart">
-              {toolTypeSearch.trim()
-                ? "Không tìm thấy dụng cụ phù hợp"
-                : "Nhập tên dụng cụ để xem thống kê"}
+              Sản phẩm không tồn tại
             </div>
           ) : (
-            <div className="type-charts-grid">
-              {toolTypeStats.map((group) => {
-                const total = Math.max(group.total, 1);
-                const warehousePct = Math.round((group.warehouse / total) * 100);
-                const inUsePct = Math.round((group.inUse / total) * 100);
-                const maintenancePct = Math.round((group.maintenance / total) * 100);
-                const disposedPct = Math.round((group.disposed / total) * 100);
+            <div className="cabinet-grid">
+              {toolTypeStats.map((slot, index) => {
+                const displayIndex = slot.slotIndex || index + 1;
 
-                const segment1 = warehousePct;
-                const segment2 = segment1 + inUsePct;
-                const segment3 = segment2 + maintenancePct;
-                const segment4 = 100; // disposed fills phần còn lại
+                if (slot.isEmpty) {
+                  // Non-matching slot: keep position, show faded card with only slot number
+                  return (
+                    <div key={`empty-wrapper-${displayIndex}`} className="slot-wrapper">
+                      <div className="slot-card slot-card-dimmed">
+                        <span className="slot-index-number dimmed">{displayIndex}</span>
+                      </div>
+                      <div className="slot-name-below invisible">-</div>
+                    </div>
+                  );
+                }
 
                 return (
-                  <div key={group.name} className="type-chart-item">
-                    <div
-                      className="type-donut"
-                      style={{
-                        background: `conic-gradient(
-                          #22c55e 0% ${segment1}%,
-                          #3b82f6 ${segment1}% ${segment2}%,
-                          #f59e0b ${segment2}% ${segment3}%,
-                          #ef4444 ${segment3}% ${segment4}%
-                        )`,
-                      }}
-                    >
-                      <div className="type-donut-center">
-                        <span className="type-total">{group.total}</span>
-                        <span className="type-label">Tổng</span>
+                  <div key={`${slot.name}-${displayIndex}`} className="slot-wrapper">
+                    <div className="slot-card">
+                      <span className="slot-index-number">{displayIndex}</span>
+                      {slot.warning && (
+                        <div className="slot-warning">
+                          <span className="material-symbols-outlined">notifications_active</span>
+                        </div>
+                      )}
+                      <div className={`slot-count ${
+                        slot.count === 10 ? '' :
+                        slot.count > 5 ? 'count-green' : 'count-red'
+                      }`}>
+                        {slot.count}
+                      </div>
+                      <div className="slot-progress-container">
+                        <div
+                          className={`slot-progress-bar ${
+                            slot.count === 10 ? 'bg-black' :
+                            slot.count > 5 ? 'bg-green' : 'bg-red'
+                          }`}
+                          style={{ width: `${(slot.count / 10) * 100}%` }}
+                        ></div>
                       </div>
                     </div>
-                    <div className="type-info">
-                      <p className="type-name">{group.name}</p>
-                      <div className="type-legend">
-                        <span className="legend-dot legend-green"></span>
-                        <span>Kho: {group.warehouse}</span>
-                      </div>
-                      <div className="type-legend">
-                        <span className="legend-dot legend-blue"></span>
-                        <span>Đang dùng: {group.inUse}</span>
-                      </div>
-                      <div className="type-legend">
-                        <span className="legend-dot legend-orange"></span>
-                        <span>Bảo trì: {group.maintenance}</span>
-                      </div>
-                      <div className="type-legend">
-                        <span className="legend-dot legend-red"></span>
-                        <span>Đã thanh lý: {group.disposed}</span>
-                      </div>
+                    <div className="slot-name-below" title={slot.name}>
+                      {slot.name}
                     </div>
                   </div>
                 );

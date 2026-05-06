@@ -844,93 +844,184 @@
   opacity: 0.9;
 }
 
-.type-charts-grid {
+.cabinet-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(9, 1fr);
   gap: 1rem;
-  margin-top: 1rem;
+  margin-top: 1.5rem;
 }
 
-.type-chart-item {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  padding: 1rem;
+@media (max-width: 1024px) {
+  .cabinet-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .cabinet-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.slot-card {
+  width: 90px;
+  height: 90px;
+  background: white;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  background: #ffffff;
-}
-
-.type-donut {
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   position: relative;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+  padding: 0.5rem;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.type-donut-center {
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  background: #ffffff;
-  display: grid;
-  place-items: center;
-  box-shadow: inset 0 0 0 1px #e2e8f0;
-  text-align: center;
+.slot-index-number {
+  position: absolute;
+  top: 4px;
+  right: 7px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #475569;
+  opacity: 0.9;
+  pointer-events: none;
+  letter-spacing: 0.02em;
+  transition: opacity 0.3s ease, color 0.3s ease;
 }
 
-.type-total {
-  font-weight: 700;
-  font-size: 1.25rem;
+.slot-index-number.dimmed {
+  opacity: 0.15;
+  color: #94a3b8;
+}
+
+.search-result-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: #2563eb;
+  font-weight: 500;
+  padding: 4px 8px 6px 2px;
+}
+
+.search-result-icon {
+  font-size: 0.95rem;
+  color: #2563eb;
+}
+
+.slot-card:hover:not(.empty) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-color: #135bec;
+}
+
+.slot-card.empty {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.slot-card-dimmed {
+  background: #f8fafc;
+  border: 1px dashed #e2e8f0;
+  box-shadow: none;
+  opacity: 0.45;
+}
+
+.slot-warning {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  color: #ef4444;
+}
+
+.slot-warning .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+.slot-count {
+  font-size: 1.75rem;
+  font-weight: 900;
   color: #0f172a;
+  margin-bottom: 0.25rem;
 }
 
-.type-label {
+.slot-count.count-red {
+  color: #ef4444;
+}
+
+.slot-count.count-green {
+  color: #10b981;
+}
+
+.slot-progress-container {
+  width: 80%;
+  height: 6px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.slot-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.bg-red {
+  background: #ef4444;
+}
+
+.bg-green {
+  background: #10b981;
+}
+
+.bg-black {
+  background: #000000;
+}
+
+.slot-name {
+  display: none;
+}
+
+.slot-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.slot-name-below {
   font-size: 0.75rem;
-  color: #64748b;
+  font-weight: 500;
+  color: #475569;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100px;
+  min-height: 1.2rem;
 }
 
-.type-info {
-  flex: 1;
+.invisible {
+  visibility: hidden;
 }
 
-.type-name {
-  font-weight: 600;
-  margin: 0 0 0.5rem;
-  color: #0f172a;
-}
-
-.type-legend {
+.system-full-warning {
+  background: #fee2e2;
+  border: 1px solid #ef4444;
+  color: #991b1b;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #475569;
-}
-
-.legend-dot {
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 9999px;
-  display: inline-block;
-}
-
-.legend-green {
-  background: #22c55e;
-}
-
-.legend-blue {
-  background: #3b82f6;
-}
-
-.legend-orange {
-  background: #f59e0b;
-}
-
-.legend-red {
-  background: #ef4444;
+  font-weight: 600;
 }
 
 .loading-state {
@@ -938,4 +1029,12 @@
   padding: 3rem;
   color: #64748b;
   font-size: 1rem;
+}
+.highlight-slot{
+  border:2px solid #ff9800;
+  box-shadow:0 0 10px #ff9800;
+}
+
+.dimmed-slot{
+  opacity:0.3;
 }
