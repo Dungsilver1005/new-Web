@@ -90,7 +90,7 @@ const startServer = async () => {
   }
 };
 
-async function processChange(change) {
+/*async function processChange(change) {
     try {
         if (change.operationType === "update") {
             const updatedFields = change.updateDescription.updatedFields;
@@ -108,8 +108,63 @@ async function processChange(change) {
     } catch (err) {
         console.error("❌ Lỗi khi xử lý processChange:", err);
     }
-}
+*/
 
+// Cache chống trigger trùng trong thời gian ngắn
+const recentlyTriggered = new Set();
+
+async function processChange(change) {
+    try {
+        // Chỉ xử lý update
+        if (change.operationType !== "update") return;
+
+        const fullDocument = change.fullDocument;
+        if (!fullDocument) return;
+
+        const toolId = fullDocument._id?.toString();
+        const productCode = fullDocument.productCode;
+        const slotIndex = fullDocument.slotIndex;
+
+        // ✅ Điều kiện trigger: trạng thái đang sử dụng
+        const isInUse = fullDocument.isInUse === true;
+
+        if (!isInUse) return;
+
+        // ❌ Không có slot → bỏ qua (tránh trigger sai)
+        if (slotIndex == null) {
+            console.warn(`⚠️ Tool ${productCode} không có slotIndex → bỏ qua`);
+            return;
+        }
+
+        // ❌ Chống trigger trùng slot trong thời gian ngắn
+        const slotKey = `slot_${slotIndex}`;
+        if (recentlyTriggered.has(slotKey)) {
+            console.log(`⏩ Bỏ qua slot ${slotIndex} — tool ${productCode} (đã trigger gần đây)`);
+            return;
+        }
+
+        // Đánh dấu slot đã trigger
+        recentlyTriggered.add(slotKey);
+
+        console.log(`🚀 Trigger PLC → Tool: ${productCode} | Slot: ${slotIndex}`);
+
+        try {
+            await triggerSlot(slotIndex);
+            console.log(`✅ Thành công → ${productCode} tại slot ${slotIndex}`);
+        } catch (plcErr) {
+            console.error(`❌ Lỗi PLC slot ${slotIndex}:`, plcErr);
+        }
+
+        // Xóa khỏi cache sau 12s (triggerSlot mất 10s, cần buffer thêm)
+        setTimeout(() => {
+            recentlyTriggered.delete(slotKey);
+        }, 12000);
+
+    } catch (err) {
+        console.error("❌ Lỗi processChange:", err);
+    }
+}
+/*
 async function watchTools() {
     // Dùng trực tiếp Mongoose thay vì client raw (do file config/db dùng mongoose)
     const pipeline = [
@@ -139,5 +194,66 @@ async function watchTools() {
         console.error("❌ Lỗi Change Stream:", error);
     });
 }
+*/
+
+// hàm watch tools mới 
+async function watchTools() {
+    let changeStream;
+    let resumeToken = null;
+
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    while (true) {
+        try {
+            console.log("📡 Bắt đầu lắng nghe 'tools'...");
+
+            const pipeline = [
+                {
+                    $match: {
+                        operationType: "update"
+                    }
+                }
+            ];
+
+            changeStream = Tool.watch(pipeline, {
+                fullDocument: "updateLookup",
+                ...(resumeToken && { resumeAfter: resumeToken })
+            });
+
+            changeStream.on("change", async (change) => {
+                try {
+                    console.log("--------------------------------------");
+                    console.log("🔥 Có update mới");
+
+                    // lưu resume token
+                    resumeToken = change._id;
+
+                    await processChange(change);
+
+                } catch (err) {
+                    console.error("❌ Lỗi xử lý change:", err);
+                }
+            });
+
+            // Nếu stream lỗi → throw để vào catch
+            await new Promise((resolve, reject) => {
+                changeStream.on("error", reject);
+                changeStream.on("close", reject);
+                changeStream.on("end", reject);
+            });
+
+        } catch (err) {
+            console.error("❌ Change Stream lỗi:", err);
+            console.log("🔄 Thử reconnect sau 3s...");
+
+            try {
+                if (changeStream) await changeStream.close();
+            } catch (e) {}
+
+            await sleep(3000);
+        }
+    }
+}
+
 
 startServer();

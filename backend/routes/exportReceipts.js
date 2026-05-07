@@ -133,25 +133,59 @@ router.post(
         status: "completed",
       });
 
-      // Update tools status
+      // Update tools status (atomic — chống race condition)
+      const updatedToolIds = [];
       for (const item of tools) {
-        const tool = await Tool.findById(item.tool);
-        tool.isInUse = true;
-        tool.currentUser = req.user._id;
-        tool.location = "in_use";
-        tool.usageCount += 1;
-        tool.lastUsedDate = new Date();
-        tool.history.push({
-          action: "export",
-          user: req.user._id,
-          fromLocation: "warehouse",
-          toLocation: "in_use",
-          notes: `Xuất kho - Phiếu: ${receipt.receiptNumber}`,
-          date: new Date(),
-        });
-        await tool.save();
-      }
+        const result = await Tool.findOneAndUpdate(
+          { _id: item.tool, isInUse: false }, // chỉ update nếu chưa ai xuất
+          {
+            $set: {
+              isInUse: true,
+              currentUser: req.user._id,
+              location: "in_use",
+              lastUsedDate: new Date(),
+              updatedAt: new Date(),
+            },
+            $inc: { usageCount: 1 },
+            $push: {
+              history: {
+                action: "export",
+                user: req.user._id,
+                fromLocation: "warehouse",
+                toLocation: "in_use",
+                notes: `Xuất kho - Phiếu: ${receipt.receiptNumber}`,
+                date: new Date(),
+              },
+            },
+          },
+          { new: true }
+        );
 
+        if (!result) {
+          // Rollback: trả lại các tool đã update trước đó
+          for (const prevId of updatedToolIds) {
+            await Tool.findByIdAndUpdate(prevId, {
+              $set: {
+                isInUse: false,
+                currentUser: null,
+                location: "warehouse",
+                updatedAt: new Date(),
+              },
+            });
+          }
+          // Xóa phiếu vừa tạo
+          await ExportReceipt.findByIdAndDelete(receipt._id);
+
+          const failedTool = await Tool.findById(item.tool);
+          return res.status(409).json({
+            success: false,
+            message: `Dụng cụ ${failedTool?.productCode || item.tool} đã được xuất bởi người khác`,
+          });
+        }
+
+        updatedToolIds.push(result._id);
+      }
+/*
       // === GỬI TRIGGER PLC — mỗi slot chỉ trigger 1 lần ===
       console.log("🔍 [DEBUG] Bắt đầu trigger PLC, số tools:", tools.length);
       const triggeredSlots = new Set();
@@ -170,7 +204,8 @@ router.post(
           }
         }
       }
-
+*/
+console.log("📤 Đã cập nhật DB, PLC sẽ được trigger qua Change Stream...");
       const populatedReceipt = await ExportReceipt.findById(receipt._id)
         .populate("exportedBy", "username fullName")
         .populate("tools.tool");
