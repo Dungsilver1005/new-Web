@@ -2,7 +2,6 @@ const express = require("express");
 const { body, validationResult } = require("express-validator");
 const Tool = require("../models/Tool");
 const { protect, authorize } = require("../middleware/auth");
-const { writePLC } = require("../utils/plcConnector");
 
 const router = express.Router();
 
@@ -413,7 +412,7 @@ router.put(
 );
 
 // @route   DELETE /api/tools/:id
-// @desc    Delete tool & báo cho PLC
+// @desc    Delete tool
 // @access  Private (Admin only)
 router.delete("/:id", protect, authorize("admin"), async (req, res) => {
   try {
@@ -426,25 +425,11 @@ router.delete("/:id", protect, authorize("admin"), async (req, res) => {
       });
     }
 
-    const pCode = tool.productCode;
-
     await tool.deleteOne();
-
-    // Báo cho PLC biết mã vừa xóa để hiển thị trên HMI (tùy logic PLC)
-    try {
-      await writePLC("productCode", pCode);
-      await writePLC("actionType", 99); // 99: Mã báo hiệu vừa xóa từ Web
-      await writePLC("trigger", true);
-    } catch (plcErr) {
-      console.error(
-        "Không thể báo cho PLC, nhưng DB đã xóa:",
-        plcErr.message || plcErr
-      );
-    }
 
     res.json({
       success: true,
-      message: "Xóa thành công và đã báo cho PLC",
+      message: "Xóa dụng cụ thành công",
     });
   } catch (error) {
     res.status(500).json({
